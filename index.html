@@ -1679,11 +1679,110 @@ footer {
   }
 
 }
+
+/* ==========================================================
+   INTRO — 같은 문서에서 전환하여 입장 클릭으로 BGM 재생
+   ========================================================== */
+[hidden] { display: none !important; }
+
+.intro-page {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 52px 24px;
+  text-align: center;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(216,184,103,.12), transparent 45%),
+    radial-gradient(ellipse at 50% 80%, rgba(65,97,150,.18), transparent 60%),
+    #050a14;
+}
+
+.intro-page::before,
+.intro-page::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: min(82vw, 700px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(216,184,103,.13);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.intro-page::after { width: min(69vw, 580px); border-style: dashed; opacity: .5; }
+.intro-content { position: relative; z-index: 1; width: min(100%, 720px); }
+.intro-symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 32px;
+  border: 1px solid rgba(216,184,103,.4);
+  border-radius: 50%;
+  color: var(--gold-light);
+  font-size: 3rem;
+  box-shadow: 0 0 65px rgba(216,184,103,.1);
+}
+.intro-title {
+  margin: 20px 0 26px;
+  color: var(--ivory);
+  font-family: Georgia, serif;
+  font-size: clamp(3.3rem, 12vw, 6.8rem);
+  font-weight: 400;
+  line-height: .95;
+  letter-spacing: -.055em;
+}
+.intro-title span {
+  display: block;
+  margin-top: 20px;
+  color: var(--gold-light);
+  font-size: .36em;
+  letter-spacing: .2em;
+  padding-left: .2em;
+}
+.intro-copy { color: #aab6c7; font-size: .94rem; word-break: keep-all; }
+.intro-enter {
+  width: auto;
+  min-width: 230px;
+  min-height: 54px;
+  margin-top: 38px;
+  border: 1px solid var(--gold-light);
+  gap: 24px;
+}
+.intro-enter:focus-visible { outline: 2px solid var(--ivory); outline-offset: 6px; }
+.intro-note { margin-top: 16px; color: var(--sub); font-size: .75rem; }
+.intro-footer { margin-top: 54px; color: #8898ad; font-size: .62rem; letter-spacing: .19em; }
+.music-status { margin-top: 10px; color: var(--gold-light); font-size: .72rem; }
+
 </style>
 </head>
 
 
 <body>
+
+<!-- 인트로 전용 화면: 새 문서로 이동하지 않아 음악이 끊기지 않습니다. -->
+<section class="intro-page" id="introPage" aria-labelledby="introTitle">
+  <div class="intro-content">
+    <div class="intro-symbol" aria-hidden="true">✦</div>
+    <p class="eyebrow">WELCOME TO THE CELESTIAL ARCHIVE</p>
+    <h1 class="intro-title" id="introTitle">SERAPH<span>ACADEMY</span></h1>
+    <p class="intro-copy">빛의 문턱을 넘어, 당신의 이야기가 시작되는 곳.<br>세라프 아카데미에 오신 것을 환영합니다.</p>
+    <button class="button button-primary intro-enter" id="enterAcademy" type="button" aria-describedby="introSoundNote">
+      아카데미 입장하기 <span aria-hidden="true">→</span>
+    </button>
+    <p class="intro-note" id="introSoundNote"></p>
+    <p class="intro-footer">SERAPH ACADEMY · CELESTIAL ARCHIVE</p>
+    <noscript><p class="intro-note">입장하려면 브라우저에서 JavaScript를 활성화해 주세요.</p></noscript>
+  </div>
+</section>
+
+<!-- 입장 전에는 본문과 음악 컨트롤이 보이거나 키보드로 선택되지 않습니다. -->
+<div id="academyContent" hidden>
+
 
 <!-- ==========================================================
      NAV
@@ -3635,6 +3734,7 @@ assets/audio/bgm.mp3
 >
 
 </audio>
+<p class="music-status" id="musicStatus" role="status" aria-live="polite"></p>
 
 
 <div class="music-controls">
@@ -3642,6 +3742,9 @@ assets/audio/bgm.mp3
 <button
   class="music-button"
   id="playButton"
+  type="button"
+  aria-label="배경음악 재생"
+  aria-pressed="false"
 >
 PLAY
 </button>
@@ -3649,6 +3752,7 @@ PLAY
 <input
   class="volume"
   id="volumeControl"
+  aria-label="배경음악 볼륨"
   type="range"
   min="0"
   max="1"
@@ -3663,6 +3767,8 @@ PLAY
 </aside>
 
 
+
+</div><!-- /academyContent -->
 
 <script>
 /* ==========================================================
@@ -4651,66 +4757,90 @@ profileImage.addEventListener(
    MUSIC PLAYER
    ========================================================== */
 
-const bgm =
-  document.getElementById("bgm");
+const bgm = document.getElementById("bgm");
+const playButton = document.getElementById("playButton");
+const volumeControl = document.getElementById("volumeControl");
+const musicPlayer = document.getElementById("musicPlayer");
+const musicCollapse = document.getElementById("musicCollapse");
+const musicStatus = document.getElementById("musicStatus");
+const introPage = document.getElementById("introPage");
+const academyContent = document.getElementById("academyContent");
+const enterAcademy = document.getElementById("enterAcademy");
+let enteredAcademy = false;
+let musicStarting = false;
 
-const playButton =
-  document.getElementById("playButton");
+bgm.volume = Number(volumeControl.value);
 
-const volumeControl =
-  document.getElementById("volumeControl");
+function syncMusicButton() {
+  const playing = !bgm.paused && !bgm.ended;
+  playButton.textContent = playing ? "PAUSE" : "PLAY";
+  playButton.setAttribute("aria-pressed", String(playing));
+  playButton.setAttribute("aria-label", playing ? "배경음악 일시정지" : "배경음악 재생");
+}
 
-const musicPlayer =
-  document.getElementById("musicPlayer");
+function showMusicError(error) {
+  musicStatus.textContent = error && error.name === "NotAllowedError"
+    ? "음악 재생이 차단되었습니다. PLAY 버튼을 눌러 주세요."
+    : "배경음악을 불러오지 못했습니다. PLAY 버튼으로 다시 시도해 주세요.";
+}
 
-const musicCollapse =
-  document.getElementById("musicCollapse");
-
-
-bgm.volume =
-  Number(
-    volumeControl.value
-  );
-
-
-playButton.addEventListener(
-  "click",
-  async () => {
-
-    if (bgm.paused) {
-
-      try {
-
-        await bgm.play();
-
-        playButton.textContent =
-          "PAUSE";
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "BGM playback error:",
-          error
-        );
-
-      }
-
+async function startMusic() {
+  if (musicStarting) return;
+  musicStarting = true;
+  musicStatus.textContent = "배경음악을 불러오는 중입니다…";
+  try {
+    // 이전 로딩이 실패했다면 PLAY 클릭으로 소스를 다시 요청합니다.
+    if (bgm.error || bgm.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+      bgm.load();
     }
-
-    else {
-
-      bgm.pause();
-
-      playButton.textContent =
-        "PLAY";
-
-    }
-
+    // 클릭 이벤트 안에서 즉시 호출해야 소리 있는 재생을 허용받을 수 있습니다.
+    // 이 호출 앞에 await, setTimeout 또는 페이지 이동을 넣지 마세요.
+    await bgm.play();
+    musicStatus.textContent = "";
+  } catch (error) {
+    showMusicError(error);
+  } finally {
+    musicStarting = false;
+    syncMusicButton();
   }
-);
+}
 
+bgm.addEventListener("play", syncMusicButton);
+bgm.addEventListener("pause", syncMusicButton);
+bgm.addEventListener("ended", syncMusicButton);
+bgm.addEventListener("playing", () => { musicStatus.textContent = ""; });
+bgm.addEventListener("error", () => {
+  if (enteredAcademy) showMusicError(bgm.error);
+  syncMusicButton();
+});
+
+enterAcademy.addEventListener("click", () => {
+  if (enteredAcademy) return;
+  enteredAcademy = true;
+
+  // 재생 완료를 기다리지 않고 본문을 열어 느린 연결/음원 오류에도 입장합니다.
+  startMusic();
+  academyContent.hidden = false;
+  introPage.hidden = true;
+
+  if (profilePage.classList.contains("open")) {
+    profileClose.focus({ preventScroll: true });
+    return;
+  }
+  const anchor = document.getElementById(window.location.hash.slice(1));
+  const destination = anchor || document.getElementById("home");
+  destination.setAttribute("tabindex", "-1");
+  destination.focus({ preventScroll: true });
+  destination.scrollIntoView({ behavior: "instant", block: "start" });
+});
+
+playButton.addEventListener("click", () => {
+  if (bgm.paused) {
+    startMusic();
+  } else {
+    bgm.pause();
+  }
+});
 
 volumeControl.addEventListener(
   "input",
